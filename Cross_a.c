@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <pthread.h>
 #include <semaphore.h>
 #include <string.h>
 #include <stdlib.h>
@@ -57,8 +56,8 @@ int main(int argc, char **argv)
 
     if (argc != 3)
     {
-        fprintf(stderr, "Bitte genau zwei Argumente angeben\n");
-        return 1;
+        perror("Bitte genau zwei Argumente angeben\n");
+        exit(EXIT_FAILURE);
     }
 
     enum directions car_src = string_to_enum(argv[1]);
@@ -66,8 +65,8 @@ int main(int argc, char **argv)
 
     if (car_src == car_dest)
     {
-        fprintf(stderr, "Quelle und Ziel dürfen nicht gleich sein\n");
-        return 1;
+        perror("Quelle und Ziel dürfen nicht gleich sein\n");
+        exit(EXIT_FAILURE);
     }
 
     sem_t *sem_src = sem_open(directions[car_src], O_CREAT, 0666, 1);
