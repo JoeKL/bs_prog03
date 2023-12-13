@@ -39,8 +39,8 @@ int main(int argc, char const *argv[])
     }
 
 
-    // FIFO öffnen
-    fd = open(FIFO_PATH, O_RDONLY | O_NONBLOCK);
+    // open fifo
+    fd = open(FIFO_PATH, O_RDONLY | O_NONBLOCK); // Open the FIFO for reading only, without blocking the caller if no data is available.
     if (fd == -1) {
         perror("open");
         exit(EXIT_FAILURE);
@@ -49,24 +49,24 @@ int main(int argc, char const *argv[])
 
 
     while (1) {
-        // Sende SIGUSR1 an alle Käfer
+        // send SIGUSR1 to kaefer
         for (int i = 0; i <= kaefer_count; i++) {
+            // com-channel to get status of kaefer
             kill(kaefer_pids[i], SIGUSR1);
         }
 
-        // Warte 5 Sekunden
         sleep(5);
 
-        // Zähle die 0en im Buffer der Länge kaefer_count
+        // count zeros in buffer
         int blockedCount = 0;
         for (int i = 0; i < kaefer_count; i++) {
             if (buffer[i] == 0) {
-                blockedCount++;  // Zählt, wie oft "BLOCKED" vorkommt
+                blockedCount++;  // 
             }
         }
 
-        // Prüfe auf Deadlock
-        // Wenn genauso viele 0en wie kaefer, dann warten alle kaefer => deadlock
+        // check if deadlock
+        // if  blockedCount == kaefer_count, all kaefer are waiting => deadlock
         if (blockedCount == kaefer_count) {
             printf("DEADLOCK\n");
         }

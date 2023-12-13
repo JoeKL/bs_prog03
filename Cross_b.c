@@ -9,6 +9,7 @@
 #include <signal.h>
 #include <stdbool.h>
 
+
 #define BUFFSIZE 512
 bool isBlocked = false;
 #define FIFO_PATH "police"
@@ -45,8 +46,8 @@ enum directions string_to_enum(const char *str)
 
 void messageIsBlocked(){
 
-    int fd = open(FIFO_PATH, O_WRONLY);
-    if (fd != -1) {
+    int fd = open(FIFO_PATH, O_WRONLY); // Fifo in Write only öffnen
+    if (fd != -1) { // wenn geöffnet werden konnte
         if (isBlocked) {
             char message[] = "0"; // 0 == Blocked
             write(fd, message, strlen(message) + 1);
@@ -55,6 +56,9 @@ void messageIsBlocked(){
             write(fd, message, strlen(message) + 1);
         }
         close(fd);
+    } else {
+        perror("Konnte FIFO nicht öffnen.");
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -62,14 +66,10 @@ void messageIsBlocked(){
 void signalHandler(int signum)
 {
 
-
-    if (signum == SIGINT){
+    if (signum == SIGINT){ // if sigint -> Kill program
         printf("SIGINT signal received. Exiting...\n");
-        // Perform any cleanup operations here
-        // sem_close(sem_src);
-        // sem_close(sem_dest);
         exit(0);
-    } else if (signum == SIGUSR1)
+    } else if (signum == SIGUSR1) // else handle as status-message in Fifo
     {
         messageIsBlocked();
     }
@@ -84,10 +84,10 @@ int main(int argc, char **argv)
     memset(&sa, 0, sizeof(sa));
 
     sa.sa_handler = signalHandler;
-    sa.sa_flags = SA_RESTART; // Wichtig, um Systemaufrufe nicht zu unterbrechen
+    sa.sa_flags = SA_RESTART; // dont interrupt syscalls
 
-    sigaction(SIGUSR1, &sa, NULL);
-    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGINT, &sa, NULL); // Kill Signal zu stop programm 
+    sigaction(SIGUSR1, &sa, NULL); // Kill signal to write Programm status in Fifo 
 
     // get pid
     pid_t pid = getpid();
