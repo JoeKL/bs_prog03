@@ -36,7 +36,7 @@ runC: Cross_c Police_c $(SEMA) $(FIFOS)
 	./Cross_c east north &
 	./Cross_c south east &
 	./Cross_c west south &
-	./Police_c $$(pgrep Cross_c) &
+	./Police_c $(pgrep Cross_c) &
 
 # Käfer und Polizei hart beenden und Semaphoren zurücksetzen
 .PHONY: kill
@@ -82,3 +82,5 @@ $(FIFOS):
 clean: setup
 	./setup
 	rm -rf setup Police_b Police_c Cross_a Cross_b Cross_c $(FIFOS)
+	pgrep Cross | xargs kill -SIGKILL > /dev/null
+	pgrep Police | xargs kill -SIGKILL > /dev/null
