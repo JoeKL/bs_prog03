@@ -10,6 +10,8 @@
 #define BUFFSIZE 512
 #define FIFO_PATH "police"
 
+
+
 int main(int argc, char const *argv[])
 {
 
@@ -27,7 +29,7 @@ int main(int argc, char const *argv[])
     pid_t kaefer_pids[kaefer_count];
 
     //copy each argv > 0 and check if argument is integer
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < kaefer_count; i++) {
         char *endptr;
         kaefer_pids[i] = strtol(argv[i + 1], &endptr, 10);
         
