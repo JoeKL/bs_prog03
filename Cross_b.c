@@ -9,11 +9,13 @@
 #include <signal.h>
 #include <stdbool.h>
 
-
 #define BUFFSIZE 512
-bool isBlocked = false;
 #define FIFO_PATH "police"
 
+bool isBlocked = false;
+pid_t pid;
+sem_t *sem_src;
+sem_t *sem_dest;
 
 // semaphores for all 4 directions
 const char *directions[] = {"/north", "/east", "/south", "/west"};
@@ -43,20 +45,26 @@ enum directions string_to_enum(const char *str)
     exit(1);
 }
 
-
-void messageIsBlocked(){
+void messageIsBlocked()
+{
 
     int fd = open(FIFO_PATH, O_WRONLY); // Fifo in Write only öffnen
-    if (fd != -1) { // wenn geöffnet werden konnte
-        if (isBlocked) {
+    if (fd != -1)
+    { // wenn geöffnet werden konnte
+        if (isBlocked)
+        {
             char message[] = "0"; // 0 == Blocked
             write(fd, message, strlen(message) + 1);
-        } else {
+        }
+        else
+        {
             char message[] = "1"; // 1 == Free
             write(fd, message, strlen(message) + 1);
         }
         close(fd);
-    } else {
+    }
+    else
+    {
         perror("Konnte FIFO nicht öffnen.");
         exit(EXIT_FAILURE);
     }
@@ -66,15 +74,16 @@ void messageIsBlocked(){
 void signalHandler(int signum)
 {
 
-    if (signum == SIGINT){ // if sigint -> Kill program
+    if (signum == SIGINT)
+    { // if sigint -> Kill program
         printf("SIGINT signal received. Exiting...\n");
         exit(0);
-    } else if (signum == SIGUSR1) // else handle as status-message in Fifo
+    }
+    else if (signum == SIGUSR1) // else handle as status-message in Fifo
     {
         messageIsBlocked();
     }
 }
-
 
 int main(int argc, char **argv)
 {
@@ -86,16 +95,16 @@ int main(int argc, char **argv)
     sa.sa_handler = signalHandler;
     sa.sa_flags = SA_RESTART; // dont interrupt syscalls
 
-    sigaction(SIGINT, &sa, NULL); // Kill Signal zu stop programm 
-    sigaction(SIGUSR1, &sa, NULL); // Kill signal to write Programm status in Fifo 
+    sigaction(SIGINT, &sa, NULL);  // Kill Signal zu stop programm
+    sigaction(SIGUSR1, &sa, NULL); // Kill signal to write Programm status in Fifo
 
     // get pid
-    pid_t pid = getpid();
+    pid = getpid();
 
     // set random seed to pid
     srand(pid);
 
-    // if not exactly 3 arguments (progname, source, destination), return failure 
+    // if not exactly 3 arguments (progname, source, destination), return failure
     if (argc != 3)
     {
         perror("Bitte genau zwei Argumente angeben\n");
@@ -114,7 +123,7 @@ int main(int argc, char **argv)
     }
 
     // open sem_src, return failure if fails
-    sem_t *sem_src = sem_open(directions[car_src], O_CREAT, 0666, 1);
+    sem_src = sem_open(directions[car_src], O_CREAT, 0666, 1);
     if (sem_src == SEM_FAILED)
     {
         perror("sem_open/sem_src");
@@ -122,46 +131,49 @@ int main(int argc, char **argv)
     }
 
     // open sem_dest, return failure if fails
-    sem_t *sem_dest = sem_open(directions[car_dest], O_CREAT, 0666, 1);
+    sem_dest = sem_open(directions[car_dest], O_CREAT, 0666, 1);
     if (sem_dest == SEM_FAILED)
     {
         perror("sem_open/sem_dest");
         exit(EXIT_FAILURE);
     }
 
-    // Kaefer comes from source direction
-    printf("Kaefer %i: ich komme von %s.\n", pid, argv[1]);
-    isBlocked = true;
-    sem_wait(sem_src);
-    isBlocked = false;
-    // when source direction is not blocked
+    while (1)
+    {
 
-    printf("Kaefer %i: ich stehe nun bei %s.\n", pid, argv[1]);
+        // Kaefer comes from source direction
+        printf("Kaefer %i: ich komme von %s.\n", pid, argv[1]);
+        isBlocked = true;
+        sem_wait(sem_src);
+        isBlocked = false;
+        // when source direction is not blocked
 
-    // usleep(1000000 - 100 * (rand() % 10));
-    sleep(3);
+        printf("Kaefer %i: ich stehe nun bei %s.\n", pid, argv[1]);
 
-    printf("Kaefer %i: ist %s frei?\n", pid, argv[2]);
+        usleep(1000000 - 100 * (rand() % 10));
+        // sleep(3);
 
-    //waits if destination isnt free
-    isBlocked = true;
-    sem_wait(sem_dest);
-    isBlocked = false;
+        printf("Kaefer %i: ist %s frei?\n", pid, argv[2]);
 
+        // waits if destination isnt free
+        isBlocked = true;
+        sem_wait(sem_dest);
+        isBlocked = false;
 
-    // if free, drive
-    printf("Kaefer %i: Es ist frei!\n", pid);
-    printf("Kaefer %i: Ich fahre los nach %s.\n", pid, argv[2]);
+        // if free, drive
+        printf("Kaefer %i: Es ist frei!\n", pid);
+        printf("Kaefer %i: Ich fahre los nach %s.\n", pid, argv[2]);
 
-    sleep(1);
+        sleep(1);
 
-    // open the source again, since its free now
-    sem_post(sem_src);
+        // open the source again, since its free now
+        sem_post(sem_src);
 
-    printf("Kaefer %i: ich bin angekommen in %s.\n", pid, argv[2]);
+        printf("Kaefer %i: ich bin angekommen in %s.\n", pid, argv[2]);
 
-    //open the destination again, since car has left the intersection
-    sem_post(sem_dest);
+        // open the destination again, since car has left the intersection
+        sem_post(sem_dest);
+    }
 
     // close semaphores
     sem_close(sem_src);

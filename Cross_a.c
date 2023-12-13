@@ -10,6 +10,10 @@
 // semaphores for all 4 directions
 const char *directions[] = {"/north", "/east", "/south", "/west"};
 
+pid_t pid;
+sem_t *sem_src;
+sem_t *sem_dest;
+
 // direction with corresponding int
 enum directions
 {
@@ -55,12 +59,12 @@ int main(int argc, char **argv)
     signal(SIGINT, signalHandler);
 
     // get pid
-    pid_t pid = getpid();
+    pid = getpid();
 
     // set random seed to pid
     srand(pid);
 
-    // if not exactly 3 arguments (progname, source, destination), return failure 
+    // if not exactly 3 arguments (progname, source, destination), return failure
     if (argc != 3)
     {
         perror("Bitte genau zwei Argumente angeben\n");
@@ -79,7 +83,7 @@ int main(int argc, char **argv)
     }
 
     // open sem_src, return failure if fails
-    sem_t *sem_src = sem_open(directions[car_src], O_CREAT, 0666, 1);
+    sem_src = sem_open(directions[car_src], O_CREAT, 0666, 1);
     if (sem_src == SEM_FAILED)
     {
         perror("sem_open/sem_src");
@@ -87,44 +91,48 @@ int main(int argc, char **argv)
     }
 
     // open sem_dest, return failure if fails
-    sem_t *sem_dest = sem_open(directions[car_dest], O_CREAT, 0666, 1);
+    sem_dest = sem_open(directions[car_dest], O_CREAT, 0666, 1);
     if (sem_dest == SEM_FAILED)
     {
         perror("sem_open/sem_dest");
         exit(EXIT_FAILURE);
     }
 
-    // Kaefer comes from source direction
-    printf("Kaefer %i: ich komme von %s.\n", pid, argv[1]);
+    while (1)
+    {
 
-    sem_wait(sem_src);
+        // Kaefer comes from source direction
+        printf("Kaefer %i: ich komme von %s.\n", pid, argv[1]);
 
-    // when source direction is not blocked
+        sem_wait(sem_src);
 
-    printf("Kaefer %i: ich stehe nun bei %s.\n", pid, argv[1]);
+        // when source direction is not blocked
 
-    // usleep(1000000 - 100 * (rand() % 10));
+        printf("Kaefer %i: ich stehe nun bei %s.\n", pid, argv[1]);
 
-    sleep(3);
-    printf("Kaefer %i: ist %s frei?\n", pid, argv[2]);
+        usleep(1000000 - 100 * (rand() % 10));
 
-    //waits if destination isnt free
+        // sleep(3);
+        printf("Kaefer %i: ist %s frei?\n", pid, argv[2]);
 
-    sem_wait(sem_dest);
+        // waits if destination isnt free
 
-    // if free, drive
-    printf("Kaefer %i: Es ist frei!\n", pid);
-    printf("Kaefer %i: Ich fahre los nach %s.\n", pid, argv[2]);
+        sem_wait(sem_dest);
 
-    sleep(1);
+        // if free, drive
+        printf("Kaefer %i: Es ist frei!\n", pid);
+        printf("Kaefer %i: Ich fahre los nach %s.\n", pid, argv[2]);
 
-    // open the source again, since its free now
-    sem_post(sem_src);
+        sleep(1);
 
-    printf("Kaefer %i: ich bin angekommen in %s.\n", pid, argv[2]);
+        // open the source again, since its free now
+        sem_post(sem_src);
 
-    //open the destination again, since car has left the intersection
-    sem_post(sem_dest);
+        printf("Kaefer %i: ich bin angekommen in %s.\n", pid, argv[2]);
+
+        // open the destination again, since car has left the intersection
+        sem_post(sem_dest);
+    }
 
     // close semaphores
     sem_close(sem_src);
