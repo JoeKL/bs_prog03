@@ -108,7 +108,7 @@ int main(int argc, char **argv)
     sleep(3);
     printf("Kaefer %i: ist %s frei?\n", pid, argv[2]);
 
-    //waits if destination is free
+    //waits if destination isnt free
 
     sem_wait(sem_dest);
 
