@@ -36,7 +36,7 @@ runC: Cross_c Police_c $(SEMA) $(FIFOS)
 	./Cross_c east north &
 	./Cross_c south east &
 	./Cross_c west south &
-	./Police_c $(pgrep Cross_c) &
+	./Police_c $$(pgrep Cross_c) &
 
 # Käfer und Polizei hart beenden und Semaphoren zurücksetzen
 .PHONY: kill
