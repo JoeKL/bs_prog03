@@ -51,15 +51,27 @@ void signalHandler()
     
     // increment semaphores if they were decremented before.
     if (sem_src_decremented) {
-        sem_post(sem_src);
+        if (sem_post(sem_src) != 0) {
+            perror("sem_post failed");
+            exit(EXIT_FAILURE);
+        }
     }
     if (sem_dest_decremented) {
-        sem_post(sem_dest);
+        if (sem_post(sem_dest) != 0) {
+            perror("sem_post failed");
+            exit(EXIT_FAILURE);
+        }
     }
 
-    // close them
-    sem_close(sem_src);
-    sem_close(sem_dest);
+    // close them 
+    if (sem_close(sem_src) != 0) {
+        perror("sem_close failed");
+        exit(EXIT_FAILURE);
+    }
+    if (sem_close(sem_dest) != 0) {
+        perror("sem_close failed");
+        exit(EXIT_FAILURE);
+    }
 
     exit(EXIT_SUCCESS);
 }
@@ -128,23 +140,25 @@ int main(int argc, char **argv)
         printf("Kaefer %i: ich komme von %s.\n", pid, argv[1]);
 
         // waits until source is free
-
-        sem_wait(sem_src);
+        if (sem_wait(sem_src) != 0) {
+            perror("sem_wait failed");
+            exit(EXIT_FAILURE);
+        }
         sem_src_decremented = 1;
 
         // when source direction is not blocked
-
         printf("Kaefer %i: ich stehe nun bei %s.\n", pid, argv[1]);
 
         // sleep some time
         usleep(1000000 - 100 * (rand() % 10));
-        // sleep(3);
 
         printf("Kaefer %i: ist %s frei?\n", pid, argv[2]);
 
         // waits until destination is free
-
-        sem_wait(sem_dest);
+        if (sem_wait(sem_dest) != 0) {
+            perror("sem_wait failed");
+            exit(EXIT_FAILURE);
+        }
         sem_dest_decremented = 1;
 
         // if destination is free, drive
@@ -155,20 +169,32 @@ int main(int argc, char **argv)
         sleep(1);
 
         // open up the source again, since its free now
-        sem_post(sem_src);
+        if (sem_post(sem_src) != 0) {
+            perror("sem_post failed");
+            exit(EXIT_FAILURE);
+        }
         sem_src_decremented = 0;
 
 
         printf("Kaefer %i: ich bin angekommen in %s.\n", pid, argv[2]);
 
         // open up the destination again, since car has left the intersection
-        sem_post(sem_dest);
+        if (sem_post(sem_dest) != 0) {
+            perror("sem_post failed");
+            exit(EXIT_FAILURE);
+        }
         sem_dest_decremented = 0;
 
     }
 
-    // close semaphores
-    sem_close(sem_src);
-    sem_close(sem_dest);
+    // close semaphores should ever be reached, just for good measure
+    if (sem_close(sem_src) != 0) {
+        perror("sem_close failed");
+        exit(EXIT_FAILURE);
+    }
+    if (sem_close(sem_dest) != 0) {
+        perror("sem_close failed");
+        exit(EXIT_FAILURE);
+    }
     return 0;
 }
