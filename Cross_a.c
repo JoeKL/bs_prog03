@@ -91,7 +91,11 @@ int main(int argc, char **argv)
     // flag to ensure system calls are automatically restarted if interrupted by this signal.
     sa.sa_flags = SA_RESTART;  
 
-    sigaction(SIGINT, &sa, NULL);  // Register the signal handler for SIGINT (Interrupt from keyboard, usually Ctrl+C).
+    // Register the signal handler for SIGINT (Interrupt from keyboard, usually Ctrl+C).
+    if (sigaction(SIGINT, &sa, NULL) == -1) {
+        perror("Error setting handler for SIGINT");
+        exit(EXIT_FAILURE);
+    }
 
     // get pid
     pid = getpid();
