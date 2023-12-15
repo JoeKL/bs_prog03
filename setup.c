@@ -11,7 +11,7 @@ void initialize_semaphores(sem_t *semaphores[]) {
     for (int i = 0; i < SEM_COUNT; i++) {
         semaphores[i] = sem_open(directions[i], O_CREAT, 0644, 1);
         if (semaphores[i] == SEM_FAILED) {
-            perror("sem_open Fehler");
+            perror("sem_open error");
             exit(EXIT_FAILURE);
         }
     }
@@ -20,7 +20,7 @@ void initialize_semaphores(sem_t *semaphores[]) {
 void close_semaphores(sem_t *semaphores[]) {
     for (int i = 0; i < SEM_COUNT; i++) {
         if (sem_close(semaphores[i]) != 0) {
-            perror("sem_close Fehler");
+            perror("sem_close error");
             exit(EXIT_FAILURE);
         }
     }
@@ -29,7 +29,7 @@ void close_semaphores(sem_t *semaphores[]) {
 void  unlink_semaphores() {
     for (int i = 0; i < SEM_COUNT; i++) {
         if (sem_unlink(directions[i]) != 0) {
-            perror("sem_close Fehler");
+            perror("sem_unlink error");
             exit(EXIT_FAILURE);
         }
     }
