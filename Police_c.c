@@ -7,7 +7,6 @@
 #include <unistd.h>
 #include <signal.h>
 
-
 #define BUFFSIZE 512
 #define FIFO_PATH "police"
 
@@ -20,10 +19,11 @@ int main(int argc, char const *argv[])
         exit(EXIT_FAILURE);
     }
 
+    //file descriptor
     int fd;
     char buffer[BUFFSIZE];
 
-    int kaefer_count = argc - 1;
+    int kaefer_count = argc - 1; // in our case its 4
     pid_t kaefer_pids[kaefer_count];
 
     //copy each argv > 0 and check if argument is integer
@@ -38,7 +38,6 @@ int main(int argc, char const *argv[])
         }
     }
 
-
     // open fifo
     fd = open(FIFO_PATH, O_RDONLY | O_NONBLOCK); // Open the FIFO for reading only, without blocking the caller if no data is available.
     if (fd == -1) {
@@ -46,22 +45,24 @@ int main(int argc, char const *argv[])
         exit(EXIT_FAILURE);
     }
 
-
-
     while (1) {
         // send SIGUSR1 to kaefer
-        for (int i = 0; i <= kaefer_count; i++) {
+        for (int i = 0; i < kaefer_count; i++) {
             // com-channel to get status of kaefer
-            kill(kaefer_pids[i], SIGUSR1);
+            if (kill(kaefer_pids[i], SIGUSR1) == -1) {
+                perror("Error sending SIGUSR1 to process");
+                exit(EXIT_FAILURE);
+            }
         }
-
+        
+        //sleep fixed amount of time (5 sec)
         sleep(5);
 
         // count zeros in buffer
         int blockedCount = 0;
         for (int i = 0; i < kaefer_count; i++) {
             if (buffer[i] == 0) {
-                blockedCount++;  // 
+                blockedCount++;  
             }
         }
 
@@ -69,11 +70,21 @@ int main(int argc, char const *argv[])
         // if  blockedCount == kaefer_count, all kaefer are waiting => deadlock
         if (blockedCount == kaefer_count) {
             printf("DEADLOCK\n");
-            kill(kaefer_pids[0], SIGALRM);
+            
+            for (int i = 0; i < kaefer_count; i++) {
+                if (kill(kaefer_pids[i], SIGALRM) == -1) { // reset all processes
+                    perror("Error sending SIGUSR1 to process");
+                    exit(EXIT_FAILURE);
+                }
+            }
+
         }
     }
 
-    close(fd);
+    if (close(fd) != 0) {
+        perror("close fifo failed");
+        exit(EXIT_FAILURE);
+    }
+
     return 0;
 }
-

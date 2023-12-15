@@ -1,30 +1,31 @@
-#define _POSIX_C_SOURCE 200809L
+#define _POSIX_C_SOURCE 200809L //enable POSIX.1-2008 (and C99) functionalities
 
 #include <stdio.h>
 #include <semaphore.h>
 #include <string.h>
 #include <stdlib.h>
 #include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <setjmp.h>
+#include <errno.h>
 
 #define BUFFSIZE 512
 #define FIFO_PATH "police"
 
+// semaphore names for all 4 directions
+const char *directions[] = {"/north", "/east", "/south", "/west"};
+
 bool isBlocked = false;
-static sigjmp_buf jmpEnv;
 
 pid_t pid;
 sem_t *sem_src;
 sem_t *sem_dest;
 
-
-// semaphores for all 4 directions
-const char *directions[] = {"/north", "/east", "/south", "/west"};
+// the following two variables are used to check if the semaphore was already decremented by this process.
+// its volatile and sig_atomic_t to encounter any unwanted behaviour if a signal is coming in the moment it changes.
+volatile sig_atomic_t sem_src_decremented = 0;
+volatile sig_atomic_t sem_dest_decremented = 0;
 
 // direction with corresponding int
 enum directions
@@ -47,31 +48,37 @@ enum directions string_to_enum(const char *str)
     if (strcmp(str, "west") == 0)
         return west;
 
-    fprintf(stderr, "Ungültige Richtung: %s\n", str);
-    exit(1);
+    fprintf(stderr, "string_to_enum: Unknown Direction: %s\n", str);
+    exit(EXIT_FAILURE);
 }
 
+//prints the current isBlocked status into fifo 
 void messageIsBlocked()
 {
-
-    int fd = open(FIFO_PATH, O_WRONLY); // Fifo in Write only öffnen
-    if (fd != -1)
-    { // wenn geöffnet werden konnte
+    int fd = open(FIFO_PATH, O_WRONLY); // open fifo in write-only
+    if (fd != -1){ // if open successfull
         if (isBlocked)
         {
-            char message[] = "0"; // 0 == Blocked
-            write(fd, message, strlen(message) + 1);
+            char message[] = "0"; // 0 == Blocked    
+            if (write(fd, message, strlen(message) + 1) == -1) {
+                perror("Error writing 'Blocked' status");
+                exit(EXIT_FAILURE);
+            }
         }
         else
         {
             char message[] = "1"; // 1 == Free
-            write(fd, message, strlen(message) + 1);
+            if (write(fd, message, strlen(message) + 1) == -1) {
+                perror("Error writing 'Free' status");        
+                exit(EXIT_FAILURE);
+            }
         }
-        close(fd);
-    }
-    else
-    {
-        perror("Konnte FIFO nicht öffnen.");
+        if (close(fd) != 0) { //close fifo with handling
+            perror("close fifo failed");
+            exit(EXIT_FAILURE);
+        }
+    } else { // handle error if not opened sucessfull
+        perror("open fifo failed");
         exit(EXIT_FAILURE);
     }
 }
@@ -80,10 +87,34 @@ void messageIsBlocked()
 void signalHandler(int signum)
 {
 
-    if (signum == SIGINT)
-    { // if sigint -> Kill program
+    if (signum == SIGINT) { // if sigint -> Kill program
         printf("SIGINT signal received. Exiting...\n");
-        exit(0);
+        
+        // increment semaphores if they were decremented before.
+        if (sem_src_decremented) {
+            if (sem_post(sem_src) != 0) {
+                perror("sem_post failed");
+                exit(EXIT_FAILURE);
+            }
+        }
+        if (sem_dest_decremented) {
+            if (sem_post(sem_dest) != 0) {
+                perror("sem_post failed");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        // close them 
+        if (sem_close(sem_src) != 0) {
+            perror("sem_close failed");
+            exit(EXIT_FAILURE);
+        }
+        if (sem_close(sem_dest) != 0) {
+            perror("sem_close failed");
+            exit(EXIT_FAILURE);
+        }
+
+        exit(EXIT_SUCCESS);
     }
     else if (signum == SIGUSR1) // else handle as status-message in Fifo
     {
@@ -91,26 +122,43 @@ void signalHandler(int signum)
     }
     else if (signum == SIGALRM)
     {
-        printf("Kaefer %i: Ich habe keine Gedult mehr zu warten . Ich kehre um!\n", pid);
-        sem_post(sem_src);
-        sem_post(sem_dest);
-        siglongjmp(jmpEnv, 1); // Springt zum Punkt zurück, der mit sigsetjmp gesetzt wurde
+        
+        printf("Kaefer %i: Ich habe keine Gedult mehr zu warten. Ich kehre um!\n", pid);
     }
 }
 
 int main(int argc, char **argv)
 {
 
-    struct sigaction sa;
+    // declare a sigaction structure to specify how a signal should be handled.
+    struct sigaction sa;  
 
-    memset(&sa, 0, sizeof(sa));
+    // init the sigaction structure to zero, so that all fields are set to default values.
+    memset(&sa, 0, sizeof(sa));  
 
-    sa.sa_handler = signalHandler;
-    sa.sa_flags = SA_RESTART; // dont interrupt syscalls
+    // 'signalHandler' as the handler function for the signal.
+    sa.sa_handler = signalHandler;  
 
-    sigaction(SIGINT, &sa, NULL);  // Kill Signal to stop programm
-    sigaction(SIGUSR1, &sa, NULL); // Kill signal to write programm status in Fifo
-    sigaction(SIGALRM, &sa, NULL); // Kill signal to restart prog
+    // flag to ensure system calls are automatically restarted if interrupted by this signal.
+    // sa.sa_flags = SA_RESTART;  // this allows the interruption of sem_wait
+
+    // Register the signal handler for SIGINT (Interrupt from keyboard, usually Ctrl+C).
+    if (sigaction(SIGINT, &sa, NULL) == -1) {
+        perror("Error setting handler for SIGINT");
+        exit(EXIT_FAILURE);
+    }
+
+    // Register signal handler to write program status in FIFO for SIGUSR1.
+    if (sigaction(SIGUSR1, &sa, NULL) == -1) {
+        perror("Error setting handler for SIGUSR1");
+        exit(EXIT_FAILURE);
+    }
+
+    // Register the signal handler for SIGALRM
+    if (sigaction(SIGALRM, &sa, NULL) == -1) {
+        perror("Error setting handler for SIGALRM");
+        exit(EXIT_FAILURE);
+    }
 
     // get pid
     pid = getpid();
@@ -154,43 +202,86 @@ int main(int argc, char **argv)
 
     while (1)
     {
-        sigsetjmp(jmpEnv, 1);
+
         // Kaefer comes from source direction
         printf("Kaefer %i: ich komme von %s.\n", pid, argv[1]);
-        isBlocked = true;
-        sem_wait(sem_src);
-        isBlocked = false;
-        // when source direction is not blocked
 
+        // waits until source is free
+        isBlocked = true;
+        if (sem_wait(sem_src) != 0) {
+            perror("sem_wait failed");
+            exit(EXIT_FAILURE);
+        }
+        isBlocked = false;
+        sem_src_decremented = 1;
+
+        // when source direction is not blocked
         printf("Kaefer %i: ich stehe nun bei %s.\n", pid, argv[1]);
 
-        // usleep(1000000 - 100 * (rand() % 10));
-        sleep(3);
+        // sleep some time
+        usleep(1000000 - 100 * (rand() % 10));
 
         printf("Kaefer %i: ist %s frei?\n", pid, argv[2]);
 
-        // waits if destination isnt free
+        // waits until destination is free
         isBlocked = true;
-        sem_wait(sem_dest);
-        isBlocked = false;
+        if (sem_wait(sem_dest) != 0) {
+            if (errno == EINTR) {
+                // sem_wait interrupted by SIGALRM-Signal
 
-        // if free, drive
+                // inc sem_src
+                if (sem_post(sem_src) != 0) {
+                    perror("sem_post failed");
+                    exit(EXIT_FAILURE);
+                }
+                sem_src_decremented = 0;
+
+                // unblock
+                isBlocked = false;
+
+                continue; // return to start of while loop
+            } else {
+                // Anderer Fehler
+                perror("sem_wait(sem_dest) failed");
+                exit(EXIT_FAILURE);
+            }
+        }
+        isBlocked = false;
+        sem_dest_decremented = 1;
+
+        // if destination is free, drive
         printf("Kaefer %i: Es ist frei!\n", pid);
         printf("Kaefer %i: Ich fahre los nach %s.\n", pid, argv[2]);
 
+        //sleep fixed amount of time (1 sec)
         sleep(1);
 
-        // open the source again, since its free now
-        sem_post(sem_src);
+        // open up the source again, since its free now
+        if (sem_post(sem_src) != 0) {
+            perror("sem_post failed");
+            exit(EXIT_FAILURE);
+        }
+        sem_src_decremented = 0;
+
 
         printf("Kaefer %i: ich bin angekommen in %s.\n", pid, argv[2]);
 
-        // open the destination again, since car has left the intersection
-        sem_post(sem_dest);
+        // open up the destination again, since car has left the intersection
+        if (sem_post(sem_dest) != 0) {
+            perror("sem_post failed");
+            exit(EXIT_FAILURE);
+        }
+        sem_dest_decremented = 0;
     }
 
-    // close semaphores
-    sem_close(sem_src);
-    sem_close(sem_dest);
+    // close semaphores should ever be reached, just for good measure
+    if (sem_close(sem_src) != 0) {
+        perror("sem_close failed");
+        exit(EXIT_FAILURE);
+    }
+    if (sem_close(sem_dest) != 0) {
+        perror("sem_close failed");
+        exit(EXIT_FAILURE);
+    }
     return 0;
 }
