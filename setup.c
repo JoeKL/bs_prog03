@@ -5,8 +5,11 @@
 
 #define SEM_COUNT 4
 
+//the following 4 semaphore names are used
 const char *directions[] = {"/north", "/east", "/south", "/west"};
 
+
+// initializes sempahores, handles errors if something goes wrong
 void initialize_semaphores(sem_t *semaphores[]) {
     for (int i = 0; i < SEM_COUNT; i++) {
         semaphores[i] = sem_open(directions[i], O_CREAT, 0644, 1);
@@ -17,6 +20,7 @@ void initialize_semaphores(sem_t *semaphores[]) {
     }
 }
 
+// closes sempahores, handles errors if something goes wrong
 void close_semaphores(sem_t *semaphores[]) {
     for (int i = 0; i < SEM_COUNT; i++) {
         if (sem_close(semaphores[i]) != 0) {
@@ -26,6 +30,7 @@ void close_semaphores(sem_t *semaphores[]) {
     }
 }
 
+// deletes sempahores, doesnt handle errors if something goes wrong
 void  unlink_semaphores() {
     for (int i = 0; i < SEM_COUNT; i++) {
         sem_unlink(directions[i]);
