@@ -25,7 +25,6 @@ sem_t *sem_dest;
 volatile sig_atomic_t sem_src_decremented = 0;
 volatile sig_atomic_t sem_dest_decremented = 0;
 
-
 // direction with corresponding int
 enum directions
 {
@@ -218,7 +217,6 @@ int main(int argc, char **argv)
         isBlocked = false;
         sem_dest_decremented = 1;
 
-
         // if destination is free, drive
         printf("Kaefer %i: Es ist frei!\n", pid);
         printf("Kaefer %i: Ich fahre los nach %s.\n", pid, argv[2]);
@@ -242,7 +240,6 @@ int main(int argc, char **argv)
             exit(EXIT_FAILURE);
         }
         sem_dest_decremented = 0;
-
     }
 
     // close semaphores should ever be reached, just for good measure

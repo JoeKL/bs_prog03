@@ -21,8 +21,6 @@ int main(int argc, char const *argv[])
 
     //file descriptor
     int fd;
-    
-    //buffersize
     char buffer[BUFFSIZE];
 
     int kaefer_count = argc - 1; // in our case its 4
@@ -82,4 +80,3 @@ int main(int argc, char const *argv[])
 
     return 0;
 }
-
