@@ -1,18 +1,23 @@
+#define _POSIX_C_SOURCE 200809L //enable POSIX.1-2008 (and C99) functionalities
+
 #include <stdio.h>
 #include <semaphore.h>
 #include <string.h>
 #include <stdlib.h>
 #include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include <signal.h>
 
-// semaphores for all 4 directions
+// semaphore names for all 4 directions
 const char *directions[] = {"/north", "/east", "/south", "/west"};
 
 pid_t pid;
 sem_t *sem_src;
 sem_t *sem_dest;
+
+// the following two variables are used to check if the semaphore was already decremented by this process.
+// its volatile and sig_atomic_t to encounter any unwanted behaviour if a signal is coming in the moment it changes.
+volatile sig_atomic_t sem_src_decremented = 0;
+volatile sig_atomic_t sem_dest_decremented = 0;
 
 // direction with corresponding int
 enum directions
@@ -35,28 +40,46 @@ enum directions string_to_enum(const char *str)
     if (strcmp(str, "west") == 0)
         return west;
 
-    fprintf(stderr, "Ungültige Richtung: %s\n", str);
-    exit(1);
+    fprintf(stderr, "string_to_enum: Unknown Direction: %s\n", str);
+    exit(EXIT_FAILURE);
 }
 
 // handles incoming signal and exits the program
 void signalHandler()
 {
     printf("SIGINT signal received. Exiting...\n");
-    // Perform any cleanup operations here
-    // sem_post(sem_src);
-    // sem_post(sem_dest);
+    
+    // increment semaphores if they were decremented before.
+    if (sem_src_decremented) {
+        sem_post(sem_src);
+    }
+    if (sem_dest_decremented) {
+        sem_post(sem_dest);
+    }
 
-    // sem_close(sem_src);
-    // sem_close(sem_dest);
-    exit(0);
+    // close them
+    sem_close(sem_src);
+    sem_close(sem_dest);
+
+    exit(EXIT_SUCCESS);
 }
 
 int main(int argc, char **argv)
 {
 
-    // start signal handler
-    signal(SIGINT, signalHandler);
+    // declare a sigaction structure to specify how a signal should be handled.
+    struct sigaction sa;  
+
+    // init the sigaction structure to zero, so that all fields are set to default values.
+    memset(&sa, 0, sizeof(sa));  
+
+    // 'signalHandler' as the handler function for the signal.
+    sa.sa_handler = signalHandler;  
+
+    // flag to ensure system calls are automatically restarted if interrupted by this signal.
+    sa.sa_flags = SA_RESTART;  
+
+    sigaction(SIGINT, &sa, NULL);  // Register the signal handler for SIGINT (Interrupt from keyboard, usually Ctrl+C).
 
     // get pid
     pid = getpid();
@@ -71,7 +94,7 @@ int main(int argc, char **argv)
         exit(EXIT_FAILURE);
     }
 
-    // convert src and dest
+    // convert src and dest and check if names are correct
     enum directions car_src = string_to_enum(argv[1]);
     enum directions car_dest = string_to_enum(argv[2]);
 
@@ -104,34 +127,44 @@ int main(int argc, char **argv)
         // Kaefer comes from source direction
         printf("Kaefer %i: ich komme von %s.\n", pid, argv[1]);
 
+        // waits until source is free
+
         sem_wait(sem_src);
+        sem_src_decremented = 1;
 
         // when source direction is not blocked
 
         printf("Kaefer %i: ich stehe nun bei %s.\n", pid, argv[1]);
 
+        // sleep some time
         usleep(1000000 - 100 * (rand() % 10));
-
         // sleep(3);
+
         printf("Kaefer %i: ist %s frei?\n", pid, argv[2]);
 
-        // waits if destination isnt free
+        // waits until destination is free
 
         sem_wait(sem_dest);
+        sem_dest_decremented = 1;
 
-        // if free, drive
+        // if destination is free, drive
         printf("Kaefer %i: Es ist frei!\n", pid);
         printf("Kaefer %i: Ich fahre los nach %s.\n", pid, argv[2]);
 
+        //sleep fixed amount of time (1 sec)
         sleep(1);
 
-        // open the source again, since its free now
+        // open up the source again, since its free now
         sem_post(sem_src);
+        sem_src_decremented = 0;
+
 
         printf("Kaefer %i: ich bin angekommen in %s.\n", pid, argv[2]);
 
-        // open the destination again, since car has left the intersection
+        // open up the destination again, since car has left the intersection
         sem_post(sem_dest);
+        sem_dest_decremented = 0;
+
     }
 
     // close semaphores
