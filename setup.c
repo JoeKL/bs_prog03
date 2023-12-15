@@ -28,10 +28,12 @@ void close_semaphores(sem_t *semaphores[]) {
 
 void  unlink_semaphores() {
     for (int i = 0; i < SEM_COUNT; i++) {
-        if (sem_unlink(directions[i]) != 0) {
-            perror("sem_unlink error");
-            exit(EXIT_FAILURE);
-        }
+        sem_unlink(directions[i]);
+        // sem_unlink error ignored: "Dabei sollten Sie Fehler ignorieren, damit das Programm auch läuft, wenn es noch keine Semaphoren gibt."
+        // if (sem_unlink(directions[i]) != 0) {
+        //     perror("sem_unlink error");
+        //     exit(EXIT_FAILURE);
+        // }
     }
 }
 
